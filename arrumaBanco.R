@@ -1,5 +1,7 @@
 # settings ----
   library(readr)
+  library(dplyr)
+  library(lubridate)
 
 # definindo variáveis para importação ----
   facParcela   = col_factor(c("1A", "2A", "3A", "1B", "2B", "3B", "1C", "2C", "3C", "1D", "2D", "3D"))
@@ -29,13 +31,64 @@
   
   levels(dados$estrutura) = c("tronco", "galho")
   
-# Arrumando o banco ----
-  #falta:
-  # 1 - converter os perímetros em diâmetros (dados %>% mutate(diametro = perimetro * ...) %>% select (-perimetro))
-  # 2 - Tirar as linhas em que diâmetro, X2, X5 são NA (dados %>% filter(!is.na(diametro) | !is.na(X2) | !is.na(X5)))
-  # 3 - Fazer as replicações das linhas, onde encontrar valores em X2 (subs 3.5) e X5 (subs 7.5).
-  #     Ao final devem ter 579 observações (sum(dados$X2, na.rm = T) + sum(dados$X5, na.rm = T) + sum(!is.na(dados$perimetro)))
-  # 4 - salvar com save(dados, file = "dados.rda")
+# Arrumando banco ----
+  dados$X2[!is.na(dados$perimetro)] = NA
+  dados$X5[!is.na(dados$perimetro)] = NA
+  
+  dados = dados %>% mutate(diametro = perimetro/pi) %>% select (-perimetro) %>% filter(!is.na(diametro) | !is.na(X2) | !is.na(X5))
+  
+  arrumaX2 = function(dados, linha){
+    n = dados$X2[linha]
+    add_row(dados,
+            parcela          = dados[linha,]$parcela,                  
+            linha            = dados[linha,]$linha,                      
+            subTransecto     = dados[linha,]$subTransecto,        
+            direcao          = dados[linha,]$direcao,                  
+            decomp           = dados[linha,]$decomp,                    
+            estrutura        = dados[linha,]$estrutura,              
+            podridao         = dados[linha,]$podridao,                
+            comprimento      = dados[linha,]$comprimento,          
+            interceptacao    = dados[linha,]$interceptacao,      
+            dia              = dados[linha,]$dia,                          
+            mes              = dados[linha,]$mes,                          
+            ano              = dados[linha,]$ano,                          
+            perimetroBase    = dados[linha,]$perimetroBase,      
+            perimetroExtremo = dados[linha,]$perimetroExtremo,
+            diametro         = replicate(n, 3.5))
+  }
+  
+  arrumaX5 = function(dados, linha){
+    n = dados$X5[linha]
+    add_row(dados,
+            parcela          = dados[linha,]$parcela,                  
+            linha            = dados[linha,]$linha,                      
+            subTransecto     = dados[linha,]$subTransecto,        
+            direcao          = dados[linha,]$direcao,                  
+            decomp           = dados[linha,]$decomp,                    
+            estrutura        = dados[linha,]$estrutura,              
+            podridao         = dados[linha,]$podridao,                
+            comprimento      = dados[linha,]$comprimento,          
+            interceptacao    = dados[linha,]$interceptacao,      
+            dia              = dados[linha,]$dia,                          
+            mes              = dados[linha,]$mes,                          
+            ano              = dados[linha,]$ano,                          
+            perimetroBase    = dados[linha,]$perimetroBase,      
+            perimetroExtremo = dados[linha,]$perimetroExtremo,
+            diametro         = replicate(n, 7.5))
+  }
+  
+  for (i in 1:nrow(dados)){
+    if (!is.na(dados$X2[i]) & dados$X2[i] != 0)
+      dados = arrumaX2(dados, i)
+    if (!is.na(dados$X5[i]) & dados$X5[i] != 0)
+      dados = arrumaX5(dados, i)
+  }
+  
+  dados = dados %>% filter(is.na(X2) & is.na(X5)) %>% select(-X2, -X5)
+  
+  dados = dados %>% mutate(data = dmy(paste(dia, mes, ano, sep = "-"))) %>% select(-dia, -mes, -ano)
+  
+  save(dados, file = "dados.rda")
   
   ## No próximo arquivo, extrair a variável resposta com dados %>% group_by(linha, parcela, sei lá o q) %>% summarise(vol = pi * sum(diametro)/(8*45)) (acho)
   ## No próximo arquivo, fazer análises descritivas.
