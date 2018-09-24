@@ -1,7 +1,9 @@
+#esse
 # settings ----
   library(readr)
   library(dplyr)
   library(lubridate)
+  library(stringr)
 
 # definindo variáveis para importação ----
   facParcela   = col_factor(c("1A", "2A", "3A", "1B", "2B", "3B", "1C", "2C", "3C", "1D", "2D", "3D"))
@@ -31,6 +33,11 @@
   
   levels(dados$estrutura) = c("tronco", "galho")
   
+  dados = dados %>% cbind(str_split_fixed(dados$parcela, "", 2))
+  
+  names(dados)[18] <- "parcela2"
+  names(dados)[19] <- "replicacao"
+  
 # Arrumando banco ----
   dados$X2[!is.na(dados$perimetro)] = NA
   dados$X5[!is.na(dados$perimetro)] = NA
@@ -54,6 +61,8 @@
             ano              = dados[linha,]$ano,                          
             perimetroBase    = dados[linha,]$perimetroBase,      
             perimetroExtremo = dados[linha,]$perimetroExtremo,
+            parcela2         = dados[linha,]$parcela2,
+            replicacao       = dados[linha,]$replicacao,
             diametro         = replicate(n, 3.5))
   }
   
@@ -74,17 +83,48 @@
             ano              = dados[linha,]$ano,                          
             perimetroBase    = dados[linha,]$perimetroBase,      
             perimetroExtremo = dados[linha,]$perimetroExtremo,
+            parcela2         = dados[linha,]$parcela2,
+            replicacao       = dados[linha,]$replicacao,
             diametro         = replicate(n, 7.5))
   }
-  
-  for (i in 1:nrow(dados)){
+
+  n = nrow(dados)  
+  for (i in 1:n){
     if (!is.na(dados$X2[i]) & dados$X2[i] != 0)
       dados = arrumaX2(dados, i)
     if (!is.na(dados$X5[i]) & dados$X5[i] != 0)
       dados = arrumaX5(dados, i)
   }
   
+  multiplica = function(dados, linha){
+    n = 5
+    add_row(dados,
+            parcela          = dados[linha,]$parcela,                  
+            linha            = dados[linha,]$linha,                      
+            subTransecto     = dados[linha,]$subTransecto,        
+            direcao          = dados[linha,]$direcao,                  
+            decomp           = dados[linha,]$decomp,                    
+            estrutura        = dados[linha,]$estrutura,              
+            podridao         = dados[linha,]$podridao,                
+            comprimento      = dados[linha,]$comprimento,          
+            interceptacao    = dados[linha,]$interceptacao,      
+            dia              = dados[linha,]$dia,                          
+            mes              = dados[linha,]$mes,                          
+            ano              = dados[linha,]$ano,                          
+            perimetroBase    = dados[linha,]$perimetroBase,      
+            perimetroExtremo = dados[linha,]$perimetroExtremo,
+            parcela2         = dados[linha,]$parcela2,
+            replicacao       = dados[linha,]$replicacao,
+            diametro         = replicate(n, 3.5))
+  }
+  
   dados = dados %>% filter(is.na(X2) & is.na(X5)) %>% select(-X2, -X5)
+  
+  for (i in 1:nrow(dados)){
+    if (dados$diametro[i] < 10){
+      dados = multiplica(dados, i)
+    }
+  }
   
   dados = dados %>% mutate(data = dmy(paste(dia, mes, ano, sep = "-"))) %>% select(-dia, -mes, -ano)
   
