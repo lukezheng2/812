@@ -33,9 +33,9 @@ names(dados) = nomes
 
 levels(dados$estrutura) = c("tronco", "galho")
 
-dados = dados %>% cbind(str_split_fixed(dados$parcela, "", 2))
+dados = dados %>% cbind(stringr::str_split_fixed(dados$parcela, "", 2))
 
-names(dados)[18] <- "parcela2"
+names(dados)[18] <- "tratamento"
 names(dados)[19] <- "replicacao"
 
 # Arrumando banco ----
@@ -46,7 +46,7 @@ dados = dados %>%
   mutate(diametro = perimetro/pi) %>% 
   select (-perimetro) %>% 
   filter(!is.na(diametro) | !is.na(X2) | !is.na(X5)) %>% 
-  mutate(data = dmy(paste(dia, mes, ano, sep = "-"))) %>% select(-dia, -mes, -ano)
+  mutate(data = lubridate::dmy(paste(dia, mes, ano, sep = "-"))) %>% select(-dia, -mes, -ano)
 
 #Removendo observações nulas
 dados <- dados %>% filter(X2!=0 | X5!=0 | !is.na(diametro))
