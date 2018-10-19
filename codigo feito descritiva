@@ -1,0 +1,165 @@
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(ggplot2)
+library(car)
+
+
+#load("arrumaBanco")
+
+load("dados.rda")
+
+grausDeg = data.frame(decomp = factor(1:5), densidade = c(0.40, 0.30, 0.19, 0.13, 0.09))
+
+colnames(dados)=c( "parcela" ,"linha", "subTransecto","direcao", "decomp","X2", "X5", "estrutura" ,
+                   "podridao" , "comprimento" , "interceptacao",    "perimetroBase",    "perimetroExtremo"
+                   , "tratamento",   "replicacao", "diametro","data" )
+# Estimando o volume ----
+massaGrau = dados %>% group_by(tratamento, replicacao, linha, decomp, ano = year(data)) %>%
+  summarise(volumeTotal = pi^2/(8*45) * sum(diametro^2))
+
+massaGrau = inner_join(massaGrau, grausDeg) %>% mutate(massa = densidade * volumeTotal)
+
+massaTotal = massaGrau %>% group_by(tratamento, replicacao, linha, ano) %>% summarise(massa = sum(massa))
+
+# ANOVA ----
+anova = aov(massa ~ tratamento, data = massaTotal) %>% anova()
+
+
+
+#normalidade
+shapiro.test( massaTotal$massa)
+#heterocedasticidade
+bartlett.test(massa ~tratamento , data=massaTotal)
+
+
+#GRAFICOS DESCRITIVOS
+
+#comparar massa total por tratamento
+plotTotal = ggplot(massaTotal, aes(as.factor(tratamento), massa))+ 
+  geom_boxplot() +
+  labs(x = "Tratamento", y= "Massa total parc") +
+  theme_bw()
+
+# Comparar massa total por tratamento por diametro
+dados = dados %>% 
+  mutate(Cat_diametro = ifelse(diametro<5, "(2-5)", NA),
+         Cat_diametro = ifelse(diametro<10 & diametro>=5, "(5-10)", Cat_diametro),
+         Cat_diametro = ifelse(diametro>=10, "(+10)", Cat_diametro))
+## acrescentando densidade
+
+grausDegR = data.frame(decomp =as.factor( c(NA,1,2,3,4,5)), densidade = c(0.4,0.40, 0.30, 0.19, 0.13, 0.09))
+dados =inner_join(dados , grausDegR)
+
+#calculando volume
+dadosfiltrados = dados %>% group_by(tratamento, Cat_diametro, decomp,replicacao, ano = year(data), densidade) %>% 
+  summarise(volumeTotal = pi^2/(8*45) * sum(diametro^2)) %>% 
+  summarise(massa = volumeTotal * densidade) 
+  
+
+
+# BOXPLOT PARA DIAMETROS DE 2A 5
+
+diam2a5 = dadosfiltrados %>% group_by(tratamento, Cat_diametro, ano) %>%
+  summarise(massatotal = sum(massa))%>%
+  filter(Cat_diametro == "(2-5)") 
+
+plot2a5 = ggplot(diam2a5, aes(as.factor(tratamento), massatotal))+ 
+      geom_point() +
+      labs(x = "Tratamento", y= "Toneladas 2a5") +
+      theme_bw()
+  
+
+
+#Boxplot de 5a 10  
+diam5a10 = dadosfiltrados %>% group_by(tratamento, Cat_diametro, ano) %>%
+  summarise(massatotal = sum(massa))%>%
+  filter(Cat_diametro == "(5-10)") 
+
+plot5a10 = ggplot(diam5a10, aes(as.factor(tratamento), massatotal))+ 
+            geom_boxplot() +
+             labs(x = "Tratamento", y= "toneladas 5a10") +
+              theme_bw()
+
+#box plot maior que 10
+
+diam10 = dadosfiltrados %>% group_by(tratamento, Cat_diametro, ano) %>%
+  summarise(massatotal = sum(massa))%>%
+  filter(Cat_diametro == "(+10)") 
+
+plot10 = ggplot(diam10, aes(as.factor(tratamento), massatotal))+ 
+  geom_boxplot() +
+  labs(x = "Tratamento", y= "Toneladas maior que 10 cm") +
+  theme_bw()
+
+
+#
+library(cowplot)
+plot_grid(plotTotal,plot2a5,plot5a10,plot10, nrow = 2,ncol=2)
+
+# estudar cada tratamento e ver se as replicações sao diferentes
+
+#replicacao para todos os anos
+replication1 =  dadosfiltrados %>% filter(tratamento == 1)
+rep1 = ggplot(replication1, aes(as.factor(replicacao), massa)) +
+  geom_boxplot()+ labs(x = "replicacao", y= "Toneladas trat 1") + theme_bw()
+
+
+replication2 = dadosfiltrados %>% filter(tratamento == 2)
+rep2 = ggplot(replication2, aes(as.factor(replicacao), massa)) +
+  geom_boxplot()+ labs(x = "replicacao", y= "Toneladas trat 2") + theme_bw()
+
+replication3 = dadosfiltrados %>% filter(tratamento == 3)
+rep3=ggplot(replication3, aes(as.factor(replicacao), massa)) +
+  geom_boxplot()+ labs(x = "replicacao", y= "Toneladas trat 3") + theme_bw()
+
+plot_grid(rep1,rep2,rep3)
+
+#não parece haver diferenca significativa entre as replicacoes
+
+
+#estudo aprofundado de 2018
+#tratamento 1 para 2018
+dados2018um = dadosfiltrados %>% filter(ano == 2018, tratamento == 1)
+  
+plot.um=ggplot(dados2018um, aes(as.factor(replicacao), massa)) +
+  geom_boxplot()+ labs(x = "replicacao", y= "Toneladas trat 1") + theme_bw()
+
+#tratamento 2 
+dados2018dois = dadosfiltrados %>% filter(ano == 2018, tratamento == 2)
+plot.dois =ggplot(dados2018dois, aes(as.factor(replicacao), massa)) +
+  geom_boxplot()+ labs(x = "replicacao", y= "Toneladas trat2") + theme_bw()
+#tratamento 3 
+dados2018tres = dadosfiltrados %>% filter(ano == 2018, tratamento == 3)
+plot3 = ggplot(dados2018tres, aes(as.factor(replicacao), massa)) +
+  geom_boxplot()+ labs(x = "replicacao ", y= "Toneladas trat3") + theme_bw()
+
+
+plot_grid(plot.um,plot.dois,plot3)
+
+#fazer para decomposicao por tratamento
+decomposicao1 = dadosfiltrados %>% filter(tratamento == 1)
+
+d1 =ggplot(decomposicao1, aes(as.factor(decomp), massa)) +
+   geom_boxplot()+ labs(x = "replicacao ", y= "Toneladas trat1") + theme_bw()
+
+decomposicao2 = dadosfiltrados %>% filter(tratamento == 2)
+
+d2 =ggplot(decomposicao2, aes(as.factor(decomp), massa)) +
+  geom_boxplot()+ labs(x = "replicacao ", y= "Toneladas trat2") + theme_bw()
+
+decomposicao3 = dadosfiltrados %>% filter(tratamento == 3)
+
+d3 =ggplot(decomposicao1, aes(as.factor(decomp), massa)) +
+  geom_boxplot()+ labs(x = "replicacao ", y= "Toneladas trat3") + theme_bw()
+
+plot_grid(d1,d2,d3)
+#melhor separar por decomposicao?
+
+
+
+# testes com sql
+library(RSQLite)
+
+
+
