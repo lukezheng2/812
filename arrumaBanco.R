@@ -1,81 +1,90 @@
-#esse
 # settings ----
-library(readr)
-library(dplyr)
-library(lubridate)
-library(stringr)
+  library(readr)
+  library(dplyr)
+  library(stringr)
+  library(tidyr)
+  library(purrr)
+  library(magrittr)
 
 # definindo variáveis para importação ----
-facParcela   = col_factor(c("1A", "2A", "3A", "1B", "2B", "3B", "1C", "2C", "3C", "1D", "2D", "3D"))
-facLinha     = col_factor(c(18, 38, 46, 22, 30, 6, 14, 34, 42, 26, 2, 10))
-facTransecto = col_factor(1:3)
-facDecomp    = col_factor(1:5)
-facEstrutura = col_factor(c("arv", "arv(galho)"))
-facPodridao  = col_factor(c("mista", "branca", "marrom"))
-
-nomes = c("parcela", "linha",    "subTransecto", "perimetro",     "direcao",     "decomp",
-          "X2", "X5", "estrutura",    "podridao",      "comprimento", "interceptacao", 
-          "dia",     "mes",      "ano",          "perimetroBase", "perimetroExtremo")
+  facLinha     = col_factor(c(18, 38, 46, 22, 30, 6, 14, 34, 42, 26, 2, 10))
+  facTransecto = col_factor(1:3)
+  facDecomp    = col_factor(1:5)
+  facEstrutura = col_factor(c("arv", "arv(galho)"))
+  facPodridao  = col_factor(c("mista", "branca", "marrom"))
+  facAno       = col_factor(c(2016, 2017, 2018))
+  
+  nomes = c("parcela", "linha",    "subTransecto", "perimetro",     "direcao",     "decomp",
+            "X2", "X5", "estrutura",    "podridao",      "comprimento", "interceptacao", 
+            "ano",          "perimetroBase", "perimetroExtremo")
 
 # importando dados ---- 
 #"--ccc-nnc-iiccnn-c-ccc--nn"
-dados = read_delim("Planilha_ESTOQUE_2016_a_2018_Diversidade.csv", delim = ";",
-                   col_types = cols_only(Parcela             = facParcela,  Linha                         = facLinha, 'Sub transecto'      = facTransecto,
-                                         Perimetr            = "n",         direcao                       = "n",      'grau decomp'        = facDecomp, 
-                                         '[2-5 cm]'          = "i",         '[5-10 cm]'                   = "i",      'Tipo de planta'     = facEstrutura,
-                                         podridao            = facPodridao, comprimento                   = "n",      'pto inter ceptação' = "n", 
-                                         dia                 = "n",         mes                           = "n",      ano                  = "n", 
-                                         'perimetro na base' = "n",         'perimetro no extremo distal' = "n"))
+  dados = read_delim("dados brutos/Planilha_ESTOQUE_2016_a_2018_Diversidade.csv", delim = ";",
+                   col_types = cols_only(Parcela          = "c",          Linha                = facLinha,
+                                         'Sub transecto'  = facTransecto, Perimetr             = "n",
+                                         direcao          = "n",          'grau decomp'        = facDecomp, 
+                                         '[2-5 cm]'       = "i",          '[5-10 cm]'          = "i",
+                                         'Tipo de planta' = facEstrutura, podridao             = facPodridao, 
+                                         comprimento      = "n",          'pto inter ceptação' = "n", 
+                                         ano              = facAno,       'perimetro na base'  = "n",
+                                         'perimetro no extremo distal' = "n"))
 
 # Aqui aparecem uns warnings, mas é só para avisar das variáveis que eu tirei.
 
-names(dados) = nomes
+  names(dados) = nomes
 
-levels(dados$estrutura) = c("tronco", "galho")
+  levels(dados$estrutura) = c("tronco", "galho")
+  
+  rm(nomes, facDecomp, facEstrutura, facLinha, facPodridao, facTransecto, facAno)
 
-dados = dados %>% cbind(stringr::str_split_fixed(dados$parcela, "", 2))
-
-names(dados)[18] <- "tratamento"
-names(dados)[19] <- "replicacao"
+  dados %<>% separate(parcela, c("tratamento", "replicacao"), sep = 1)
+  dados$tratamento = factor(dados$tratamento)
+  dados$replicacao = factor(dados$replicacao)
 
 # Arrumando banco ----
-dados$X2[!is.na(dados$perimetro)] = NA
-dados$X5[!is.na(dados$perimetro)] = NA
+# os dados de 2018 não tem contagem
+#dados$X2[!is.na(dados$perimetro)] = NA
+#dados$X5[!is.na(dados$perimetro)] = NA
 
-dados = dados %>% 
-  mutate(diametro = perimetro/pi) %>% 
-  select (-perimetro) %>% 
-  filter(!is.na(diametro) | !is.na(X2) | !is.na(X5)) %>% 
-  mutate(data = lubridate::dmy(paste(dia, mes, ano, sep = "-"))) %>% select(-dia, -mes, -ano)
+  dados$X2[dados$X2 == 0] = NA 
+  dados$X5[dados$X5 == 0] = NA
+  
+  dados = dados %>% 
+    mutate(diametro = perimetro/pi) %>% 
+    select (-perimetro) %>% 
+    filter(!is.na(diametro) | !is.na(X2) | !is.na(X5))
 
-#Removendo observações nulas
-dados <- dados %>% filter(X2!=0 | X5!=0 | !is.na(diametro))
-n = 5*(dados %>% filter(!is.na(X2)) %>% {.$X2 %>% sum} + dados %>% filter(!is.na(X5)) %>% {.$X5 %>% sum})
+  dadosAnt = dados %>% filter(ano != 2018)
+  dadosPos = dados %>% filter(ano == 2018)
 
-rep_x <- function(dados, n, i, media){
-  y = 5*n
-  for(a in 1:y){
-    dados %<>% rbind(dados[i,] %>% mutate(diametro = media)) 
-  }
-  return(dados)
-}
-
-for(i in 1:266){
-  if(!is.na(dados$X2[i])){
-    x = dados$X2[i]
-    dados <- rep_x(dados,x,i, 3.5)
+  # Calcular quantas observações devem ter ao final ----
+  # para ant
+  nAnt = (sum(dadosAnt$X2, na.rm = T) + sum(dadosAnt$X5, na.rm = T))*5 + sum(!is.na(dadosAnt$diametro))
+  # para pos
+  nPos = (sum(dadosPos$X2, na.rm = T) + sum(dadosPos$X5, na.rm = T))*5 + sum(is.na(dadosPos$X2) & is.na(dadosPos$X5))
+  
+  # alocar data.frames adecuados
+  aloca = function(dados, i, n, diam){
+    do.call(rbind, rep(list(dados[i,]), n)) %>% mutate(diametro = diam)
   }
   
-  if(!is.na(dados$X5[i])){
-    x = dados$X5[i]
-    dados <- rep_x(dados,x,i, 7.5)
-  }
-  print(100*i/266)
-}
+  ant = rbind(do.call(rbind, map(1:116, function(i){if(!is.na(dadosAnt$X2[i])){aloca(dadosAnt, i, dadosAnt[i,"X2"] * 5, 3.5)}})),
+              do.call(rbind, map(1:116, function(i){if(!is.na(dadosAnt$X5[i])){aloca(dadosAnt, i, dadosAnt[i,"X5"] * 5, 7.5)}})),
+              dadosAnt %>% filter(is.na(X2) & is.na(X5))) %>% select(-X2, -X5)
+  
+  pos = rbind(do.call(rbind, map(1:150, function(i){if(!is.na(dadosPos$X2[i])){aloca(dadosPos, i, dadosPos[i,"X2"] * 5, dadosPos$diametro[i])}})),
+              do.call(rbind, map(1:150, function(i){if(!is.na(dadosPos$X5[i])){aloca(dadosPos, i, dadosPos[i,"X5"] * 5, dadosPos$diametro[i])}})),
+              dadosPos %>% filter(is.na(X2) & is.na(X5))) %>% select(-X2, -X5)
 
-dados %<>% filter(!is.na(diametro))
+  ant$catDiametro = ifelse(ant$diametro < 5,  "(2-5)",
+                    ifelse(ant$diametro < 10, "(5-10)", "(+10)"))
+  
+  pos$catDiametro = ifelse(pos$diametro < 5,  "(2-5)",
+                    ifelse(pos$diametro < 10, "(5-10)", "(+10)"))
+  
+save(ant, pos, file = "dados.rda")
 
-save(dados, file = "dados.rda")
-
-## No próximo arquivo, extrair a variável resposta com dados %>% group_by(linha, parcela, sei lá o q) %>% summarise(vol = pi * sum(diametro)/(8*45)) (acho)
+## No próximo arquivo, extrair a variável resposta com dados %>%
+#group_by(linha, parcela, sei lá o q) %>% summarise(vol = pi * sum(diametro)/(8*45)) (acho)
 ## No próximo arquivo, fazer análises descritivas.
