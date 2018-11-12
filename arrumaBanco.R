@@ -78,10 +78,10 @@
               dadosPos %>% filter(is.na(X2) & is.na(X5))) %>% select(-X2, -X5)
 
   ant$catDiametro = ifelse(ant$diametro < 5,  "(2-5)",
-                    ifelse(ant$diametro < 10, "(5-10)", "(+10)"))
+                    ifelse(ant$diametro < 10, "(5-10)", "(+10)")) %>% factor(levels = c("(2-5)", "(5-10)", "(+10)"))
   
   pos$catDiametro = ifelse(pos$diametro < 5,  "(2-5)",
-                    ifelse(pos$diametro < 10, "(5-10)", "(+10)"))
+                    ifelse(pos$diametro < 10, "(5-10)", "(+10)")) %>% factor(levels = c("(2-5)", "(5-10)", "(+10)"))
   
 save(ant, pos, file = "dados.rda")
 
