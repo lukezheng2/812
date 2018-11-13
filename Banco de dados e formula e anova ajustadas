@@ -10,7 +10,7 @@ library(car)
 library(agricolae)
 library(DescTools)
 library(broom)
-
+library(xtable)
 
 #############ARRUMANDO OS DADOS###############################
 # definindo variáveis para importação ----
@@ -105,8 +105,10 @@ grausDeg = data.frame(decomp = factor(1:5), densidade = c(0.40, 0.30, 0.19, 0.13
 
 volAnt = ant %>% filter(ano == 2017) %>% group_by(linha, tratamento, replicacao, ano, decomp) %>%
   summarise(vol = (pi^2) * sum(diametro ^2)/(8*45))
+
 volPos = pos %>% group_by(linha, tratamento, replicacao, ano, decomp) %>% 
   summarise(vol = (pi^2) * sum(diametro ^2)/(8*45))
+
 vol10  = rbind(ant, pos) %>% filter(diametro > 10) %>% 
   group_by(linha, tratamento, replicacao, ano, decomp) %>% 
   summarise(vol = (pi^2) * sum(diametro ^2)/(8*45))
@@ -116,26 +118,117 @@ massaPos = inner_join(volPos, grausDeg) %>% mutate(massa = vol * densidade)
 massa10  = inner_join(vol10,  grausDeg) %>% mutate(massa = vol * densidade)
 
 #modelo
-fit = aov(log(massa) ~ tratamento + replicacao + linha, data = massa10) 
+fit = aov(log(massa) ~ tratamento , data = massa10) 
 anova(fit)
-#comparação de medias
-ScheffeTest(fit)
-
-plot(resid(fit)); abline(h = 0)
 
 #banda de confiança
 qqPlot(residuals(fit))
 #teste de normalidade
 shapiro.test(resid(fit))
 #teste de variancia
-leveneTest(log(massa) ~ tratamento * replicacao * linha, data = massaAnt)
+leveneTest(log(massa) ~ tratamento , data = massa10)
 
-shapiro.test(log(massaPos$massa))
+#comparação de medias
+ScheffeTest(fit)
+TukeyHSD(fit) %>% tidy() 
+
+
+###### modelo para 2018 #######3
+fit1 = aov(log(massa) ~ tratamento , data= massaPos)
+anova(fit1)
+
+#banda de confiança
+qqPlot(residuals(fit1))
+
+#grafico de residuos
+plot(fit1$residuals)
+#teste de normalidade
+shapiro.test(resid(fit1))
+#teste de variancia
+leveneTest(log(massa) ~ tratamento , data = massaPos)
+
+#comparação de medias
+ScheffeTest(fit1)
+TukeyHSD(fit1) %>% tidy() 
+  
+######## modelo 2017 #######################
+
+
+fit2 = aov(log(massa) ~ tratamento, data=massaAnt)
+anova(fit2)
+
+#banda de confiança
+qqPlot(residuals(fit2))
+
+#grafico de residuos
+plot(fit2$residuals)
+#teste de normalidade
+shapiro.test(resid(fit2))
+#teste de variancia
+leveneTest(log(massa) ~ tratamento , data = massaAnt)
+
+#comparação de medias
+ScheffeTest(fit2)
+TukeyHSD(fit2) %>% tidy() 
+
+
+#massa para cada tratamento
+
+massaAnt %>% rbind(massaPos)  %>% 
+  group_by(ano, tratamento) %>% 
+  summarise(massa = sum(massa)) %>% 
+  spread(tratamento,massa) %>% 
+  xtable()
+
+
+#Decomp
+ant %>% rbind(pos) %>% 
+  select(decomp,ano, tratamento) %>%
+  group_by(ano,tratamento) %>% 
+  table()
+
+ant %>% rbind(pos) %>% 
+  ggplot(aes(x = ano, group = decomp, fill = decomp)) +
+  geom_bar(color="black", position = "dodge") +
+  labs(x = "Ano" , y = "Frequência") +
+  scale_fill_brewer(palette = "Dark2", "Grau de decomposição")
+
+ant %>% rbind(pos) %>% 
+  ggplot(aes(x = tratamento, group = decomp, fill = decomp)) +
+  geom_bar(color="black", position = "dodge") +
+  labs(x = "Tratamento" , y = "Frequência") +
+  scale_fill_brewer(palette = "Dark2", "Grau de decomposição") +
+  facet_grid(aes(ano))
+
+#podridão
+
+ant %>% rbind(pos) %>% filter(ano!="2016") %>% 
+  ggplot(aes(x = tratamento, group = podridao, fill = podridao)) +
+  geom_bar(color="black", position = "dodge") +
+  labs(x = "Tratamento" , y = "Frequência") +
+  scale_fill_brewer(palette = "Dark2", "Grau de decomposição") +
+  theme_bw()#+
+  #facet_grid(aes(ano))
+
+ant %>% rbind(pos) %>% 
+  group_by(ano,tratamento) %>% 
+  summarise(n=n(), NAS = sum(is.na(podridao))/n, 
+            mista = sum(podridao=="mista", na.rm = T)/n,
+            branca = sum(podridao=="branca", na.rm = T)/n,
+            marrom = sum(podridao=="marrom", na.rm = T)/n) %>% 
+  ungroup() %>% 
+  View
+
+
+
+
+  
+#GRAFICO HULK
 log(massaPos$massa) %>% hist()
 ggplot(massaPos, aes(x = log(massa), fill = factor(tratamento))) + geom_histogram(binwidth = .2)
 
 
-##TESTE SCHEFFE por no trabalho
-fit1 = aov(log(massa)~ tratamento, data =  massa10)
-ScheffeTest(x=fit1)
-TukeyHSD(fit1) %>% tidy() 
+
+
+
+
